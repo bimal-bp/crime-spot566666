@@ -28,7 +28,62 @@ def get_db_connection():
         st.error(f"Database connection error: {e}")
         return None
 
-# Job Recommendation Function
+# ------------------- USER MANAGEMENT FUNCTIONS -------------------
+
+def register_user(email, password):
+    conn = get_db_connection()
+    if conn is None:
+        return False
+    try:
+        cur = conn.cursor()
+        # Check if user already exists:
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        if cur.fetchone():
+            st.error("User already exists. Please log in.")
+            cur.close()
+            conn.close()
+            return False
+
+        # Hash the password:
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        # Insert new user with default role 'user'
+        cur.execute(
+            "INSERT INTO users (email, password, role) VALUES (%s, %s, %s)",
+            (email, hashed_password, "user")
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"Error during registration: {e}")
+        return False
+
+def authenticate_user(email, password):
+    conn = get_db_connection()
+    if conn is None:
+        return None
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT password, role FROM users WHERE email = %s", (email,))
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        if result:
+            stored_password, role = result
+            # Compare the provided password with the stored hashed password.
+            if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
+                return role
+            else:
+                return None
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Error during authentication: {e}")
+        return None
+
+# ------------------- JOB RECOMMENDATION FUNCTION -------------------
+
 def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
     """Returns top N job recommendations with Company Name and Job Link."""
     
@@ -63,21 +118,8 @@ def recommend_jobs(job_title, skills, section, experience, salary, locations, to
     ]
     return recommended_jobs
 
-# Dummy implementations for user functions.
-# Replace these with your actual registration and authentication logic.
-def register_user(email, password):
-    # Example: Insert user into the database after hashing the password.
-    # For demo purposes, we'll always return True.
-    return True
+# ------------------- SESSION STATE INITIALIZATION -------------------
 
-def authenticate_user(email, password):
-    # Example: Validate user credentials from the database.
-    # For demo, if the email contains "admin" then return "admin", otherwise "user".
-    if "admin" in email.lower():
-        return "admin"
-    return "user"
-
-# Initialize session state variables
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "role" not in st.session_state:
@@ -87,7 +129,8 @@ if "show_trend_form" not in st.session_state:
 
 st.title("🔍 Job Recommendation System")
 
-# Sidebar Navigation
+# ------------------- SIDEBAR NAVIGATION -------------------
+
 # When not logged in, only the Home page is available.
 if not st.session_state["logged_in"]:
     nav_pages = ["Home"]
@@ -99,19 +142,22 @@ else:
         
 page = st.sidebar.radio("Go to", nav_pages)
 
-# ------------------ HOME PAGE ------------------
+# ------------------- HOME PAGE -------------------
 if page == "Home" and not st.session_state["logged_in"]:
     st.write("Welcome to the Job Recommendation System! Please log in or sign up to continue.")
     col1, col2 = st.columns(2)
 
+    # ---------- User Access (Signup & Login) ----------
     with col1:
         st.header("User Access")
+        
         st.subheader("Sign Up")
         user_signup_email = st.text_input("Email (Sign Up)", key="signup_email")
         user_signup_password = st.text_input("Password (Sign Up)", type="password", key="signup_password")
         if st.button("Sign Up", key="signup_button"):
             if register_user(user_signup_email, user_signup_password):
                 st.success("Signup successful! Please log in.")
+                st.experimental_rerun()  # Re-run to update the UI
             else:
                 st.error("Signup failed. Please try again.")
                 
@@ -124,9 +170,11 @@ if page == "Home" and not st.session_state["logged_in"]:
                 st.session_state["logged_in"] = True
                 st.session_state["role"] = role
                 st.success("Login successful!")
+                st.experimental_rerun()  # Force the app to re-run and update the navigation
             else:
                 st.error("Invalid credentials.")
 
+    # ---------- Admin Access ----------
     with col2:
         st.header("Admin Access")
         admin_login_email = st.text_input("Admin Email", key="admin_login_email")
@@ -137,10 +185,11 @@ if page == "Home" and not st.session_state["logged_in"]:
                 st.session_state["logged_in"] = True
                 st.session_state["role"] = role
                 st.success("Admin login successful!")
+                st.experimental_rerun()  # Re-run after admin login
             else:
                 st.error("Invalid admin credentials.")
 
-# ------------------ USER DASHBOARD ------------------
+# ------------------- USER DASHBOARD -------------------
 elif page == "Dashboard" and st.session_state["logged_in"] and st.session_state["role"] != "admin":
     st.sidebar.title("Dashboard Navigation")
     dashboard_option = st.sidebar.radio("Select Option", ["Job Recommendations", "Market Trends"])
@@ -171,7 +220,7 @@ elif page == "Dashboard" and st.session_state["logged_in"] and st.session_state[
         st.write("📊 Market Trends coming soon!")
         # You can add additional market trend visualizations or data here.
 
-# ------------------ ADMIN DASHBOARD ------------------
+# ------------------- ADMIN DASHBOARD -------------------
 elif page == "Admin" and st.session_state["logged_in"] and st.session_state["role"] == "admin":
     st.header("Admin Dashboard - Market Trends Management")
     st.write("Here you can write and submit market trend details.")
@@ -182,7 +231,7 @@ elif page == "Admin" and st.session_state["logged_in"] and st.session_state["rol
     if st.session_state["show_trend_form"]:
         trend_text = st.text_area("Enter Market Trend Details")
         if st.button("Submit Trend"):
-            # TODO: Add your database storage logic here.
+            # TODO: Add your database storage logic for market trends here.
             st.success("Market trend submitted successfully!")
             st.session_state["show_trend_form"] = False
 
