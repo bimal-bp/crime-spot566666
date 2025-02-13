@@ -1,7 +1,6 @@
 import streamlit as st
 import psycopg2
 import bcrypt
-import ast  # To convert database array strings into Python lists
 import pandas as pd
 import joblib
 import scipy.sparse as sp
@@ -124,26 +123,17 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "role" not in st.session_state:
     st.session_state["role"] = None
-if "show_trend_form" not in st.session_state:
-    st.session_state["show_trend_form"] = False
+if "page" not in st.session_state:
+    st.session_state["page"] = "Home"
 
-st.title("🔍 Job Recommendation System")
+# ------------------- PAGE NAVIGATION -------------------
 
-# ------------------- SIDEBAR NAVIGATION -------------------
-
-# When not logged in, only the Home page is available.
-if not st.session_state["logged_in"]:
-    nav_pages = ["Home"]
-else:
-    # Once logged in, show Dashboard; if admin, also show Admin page.
-    nav_pages = ["Dashboard"]
-    if st.session_state["role"] == "admin":
-        nav_pages.append("Admin")
-        
-page = st.sidebar.radio("Go to", nav_pages)
+def navigate_to(page):
+    st.session_state["page"] = page
 
 # ------------------- HOME PAGE -------------------
-if page == "Home" and not st.session_state["logged_in"]:
+
+def home_page():
     st.write("Welcome to the Job Recommendation System! Please log in or sign up to continue.")
     col1, col2 = st.columns(2)
 
@@ -157,10 +147,7 @@ if page == "Home" and not st.session_state["logged_in"]:
         if st.button("Sign Up", key="signup_button"):
             if register_user(user_signup_email, user_signup_password):
                 st.success("Signup successful! Please log in.")
-                try:
-                    st.experimental_rerun()  # Re-run to update the UI
-                except AttributeError:
-                    st.stop()
+                navigate_to("Home")  # Stay on home page to allow login
             else:
                 st.error("Signup failed. Please try again.")
                 
@@ -173,10 +160,7 @@ if page == "Home" and not st.session_state["logged_in"]:
                 st.session_state["logged_in"] = True
                 st.session_state["role"] = role
                 st.success("Login successful!")
-                try:
-                    st.experimental_rerun()  # Force the app to re-run and update the navigation
-                except AttributeError:
-                    st.stop()
+                navigate_to("Dashboard")
             else:
                 st.error("Invalid credentials.")
 
@@ -191,15 +175,13 @@ if page == "Home" and not st.session_state["logged_in"]:
                 st.session_state["logged_in"] = True
                 st.session_state["role"] = role
                 st.success("Admin login successful!")
-                try:
-                    st.experimental_rerun()  # Re-run after admin login
-                except AttributeError:
-                    st.stop()
+                navigate_to("Admin")
             else:
                 st.error("Invalid admin credentials.")
 
 # ------------------- USER DASHBOARD -------------------
-elif page == "Dashboard" and st.session_state["logged_in"] and st.session_state["role"] != "admin":
+
+def dashboard_page():
     st.sidebar.title("Dashboard Navigation")
     dashboard_option = st.sidebar.radio("Select Option", ["Job Recommendations", "Market Trends"])
     
@@ -227,22 +209,36 @@ elif page == "Dashboard" and st.session_state["logged_in"] and st.session_state[
     elif dashboard_option == "Market Trends":
         st.header("Market Trends")
         st.write("📊 Market Trends coming soon!")
-        # You can add additional market trend visualizations or data here.
 
 # ------------------- ADMIN DASHBOARD -------------------
-elif page == "Admin" and st.session_state["logged_in"] and st.session_state["role"] == "admin":
+
+def admin_page():
     st.header("Admin Dashboard - Market Trends Management")
     st.write("Here you can write and submit market trend details.")
 
     if st.button("Write Market Trend"):
         st.session_state["show_trend_form"] = True
 
-    if st.session_state["show_trend_form"]:
+    if st.session_state.get("show_trend_form", False):
         trend_text = st.text_area("Enter Market Trend Details")
         if st.button("Submit Trend"):
             # TODO: Add your database storage logic for market trends here.
             st.success("Market trend submitted successfully!")
             st.session_state["show_trend_form"] = False
 
+# ------------------- MAIN APP LOGIC -------------------
+
+st.title("🔍 Job Recommendation System")
+
+# Sidebar navigation
+if st.session_state["logged_in"]:
+    if st.session_state["role"] == "admin":
+        pages = {"Home": home_page, "Admin": admin_page}
+    else:
+        pages = {"Home": home_page, "Dashboard": dashboard_page}
 else:
-    st.write("Please log in to continue.")
+    pages = {"Home": home_page}
+
+# Display the selected page
+page = st.sidebar.radio("Navigation", list(pages.keys()))
+pages[page]()
