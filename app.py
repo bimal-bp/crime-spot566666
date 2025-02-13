@@ -160,19 +160,22 @@ def home_page():
                 st.error("Invalid credentials.")
 
     # ---------- Admin Access ----------
+    DEFAULT_ADMIN_EMAIL = "admin@example.com"
+    DEFAULT_ADMIN_PASSWORD = "adminpassword"
+    
     with col2:
         st.header("Admin Access")
         admin_login_email = st.text_input("Admin Email", key="admin_login_email")
         admin_login_password = st.text_input("Admin Password", type="password", key="admin_login_password")
+    
         if st.button("Admin Login", key="admin_login_button"):
-            # Check against hardcoded credentials
             if admin_login_email == DEFAULT_ADMIN_EMAIL and admin_login_password == DEFAULT_ADMIN_PASSWORD:
                 st.session_state["logged_in"] = True
                 st.session_state["role"] = "admin"
                 st.success("Admin login successful!")
-                # Replace navigate_to("Admin") with your actual navigation logic if needed.
             else:
                 st.error("Invalid admin credentials.")
+
 
 
 # ------------------- USER DASHBOARD -------------------
