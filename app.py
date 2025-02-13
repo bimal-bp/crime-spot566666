@@ -1,79 +1,132 @@
 import streamlit as st
+import psycopg2
+import bcrypt
+import ast  # To convert database array strings into Python lists
 import pandas as pd
 import joblib
 import scipy.sparse as sp
 from sklearn.metrics.pairwise import cosine_similarity
 
-# ✅ Load Saved Models & Data
-vectorizer = joblib.load("vectorizer.pkl")
-scaler = joblib.load("scaler.pkl")
-df = joblib.load("df.pkl")  # Load saved DataFrame
-final_features = joblib.load("features.pkl")  # Load precomputed features
+# Database connection
+def get_db_connection():
+    try:
+        return psycopg2.connect(
+            dbname="neondb",
+            user="neondb_owner",
+            password="npg_7JQelPFsVf2K",
+            host="ep-purple-surf-a5w6dl4v-pooler.us-east-2.aws.neon.tech",
+            port="5432",
+            sslmode="require"
+        )
+    except Exception as e:
+        st.error(f"Database connection error: {e}")
+        return None
 
-def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
-    """Returns top N job recommendations with Company Name and Job Link."""
+
+# Hash password
+def hash_password(password):
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+# Verify password
+def check_password(password, hashed):
+    return bcrypt.checkpw(password.encode(), hashed.encode())
+
+# Authenticate user
+def authenticate_user(email, password):
+    conn = get_db_connection()
+    if not conn:
+        return None
     
-    # Combine inputs into a job description
-    job_desc = f"{job_title} in {section} with skills: {', '.join(skills)}"
-    user_text_vector = vectorizer.transform([job_desc])
+    cur = conn.cursor()
+    cur.execute("SELECT password, role FROM users WHERE email = %s", (email,))
+    user = cur.fetchone()
+    conn.close()
+    
+    if user and check_password(password, user[0]):
+        return user[1]  # Return role (user/admin)
+    return None
 
-    # Normalize experience & salary
-    user_numeric_vector = pd.DataFrame([[experience, salary]], columns=["Experience", "Salary"])
-    user_numeric_vector = scaler.transform(user_numeric_vector)
-    user_numeric_vector = sp.csr_matrix(user_numeric_vector)
+# Save new user
+def register_user(email, password):
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    cur = conn.cursor()
+    try:
+        hashed_password = hash_password(password)
+        cur.execute("INSERT INTO users (email, password, role) VALUES (%s, %s, 'user')", (email, hashed_password))
+        conn.commit()
+        return True
+    except psycopg2.errors.UniqueViolation:
+        st.error("Email already exists. Please use a different email.")
+        return False
+    finally:
+        conn.close()
 
-    # Encode locations if present in df
-    location_columns = [col for col in df.columns if col.startswith("location_")]
-    user_location_vector = sp.csr_matrix((1, len(location_columns)))  # Default empty matrix
+# Parse field safely
+def parse_field(data):
+    if data is None:
+        return []
+    if isinstance(data, str):
+        try:
+            return ast.literal_eval(data)
+        except (ValueError, SyntaxError):
+            return [item.strip() for item in data.split(",")]
+    elif isinstance(data, list):
+        return data
+    return []
 
-    if locations:
-        user_location_df = pd.DataFrame(0, index=[0], columns=location_columns)
-        for location in locations:
-            location_column_name = f"location_{location.lower()}"
-            if location_column_name in user_location_df.columns:
-                user_location_df[location_column_name] = 1
-        user_location_vector = sp.csr_matrix(user_location_df.values)
-
-    # Concatenate all user input features
-    user_vector = sp.hstack([user_text_vector, user_numeric_vector, user_location_vector])
-
-    # Compute similarity scores
-    similarity_scores = cosine_similarity(user_vector, final_features)
-    ranked_indices = similarity_scores.argsort()[0][::-1][:top_n]
-
-    # Retrieve recommended jobs
-    recommended_jobs = [
-        {
-            "Company": df.iloc[i]["Company"],
-            "Job Link": df.iloc[i]["job_link"]
-        }
-        for i in ranked_indices
-    ]
-    return recommended_jobs
-
-# ✅ Streamlit UI
+# Streamlit UI
 st.title("🔍 Job Recommendation System")
-st.write("Enter your job preferences to get recommendations!")
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Go to", ["Home", "Login", "Signup", "Dashboard", "Admin"])
 
-# Input fields
-job_title = st.text_input("Job Title", "DevOps Engineer")
-skills = st.text_area("Skills", "Docker, Kubernetes").split(", ")
-section = st.text_input("Job Section", "IT")
-experience = st.number_input("Years of Experience", min_value=0, max_value=50, value=5)
-salary = st.number_input("Expected Salary (in LPA)", min_value=0, max_value=100, value=15)
+if page == "Home":
+    st.write("Welcome to the Job Recommendation System! Please sign up or log in to continue.")
 
-# Location selection
-available_locations = ["Pune", "Bangalore", "Hyderabad", "Mumbai", "Delhi", "Chennai"]
-selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
+elif page == "Signup":
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    if st.button("Sign Up"):
+        if register_user(email, password):
+            st.success("Signup successful! Please log in.")
 
-if st.button("Get Recommendations"):
-    recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
-    
-    if recommendations:
-        st.subheader("Top Job Recommendations")
-        for idx, job in enumerate(recommendations, start=1):
-          
-            st.write(f"🏢 **Company:** {job['Company']}")
-            st.markdown(f"🔗 [Apply Here]({job['Job Link']})")
-    else:
-        st.write("No job recommendations found. Try modifying your search criteria.")
+elif page == "Login":
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        role = authenticate_user(email, password)
+        if role:
+            st.session_state["logged_in"] = True
+            st.session_state["role"] = role
+            st.success("Login successful! Go to Dashboard.")
+        else:
+            st.error("Invalid credentials.")
+
+elif page == "Dashboard" and st.session_state.get("logged_in"):
+    st.write("Enter your job preferences to get recommendations!")
+    job_title = st.text_input("Job Title", "DevOps Engineer")
+    skills = st.text_area("Skills", "Docker, Kubernetes").split(", ")
+    section = st.text_input("Job Section", "IT")
+    experience = st.number_input("Years of Experience", min_value=0, max_value=50, value=5)
+    salary = st.number_input("Expected Salary (in LPA)", min_value=0, max_value=100, value=15)
+    available_locations = ["Pune", "Bangalore", "Hyderabad", "Mumbai", "Delhi", "Chennai"]
+    selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
+    if st.button("Get Recommendations"):
+        recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
+        if recommendations:
+            st.subheader("Top Job Recommendations")
+            for idx, job in enumerate(recommendations, start=1):
+                st.write(f"### 🔹 Recommendation {idx}")
+                st.write(f"🏢 **Company:** {job['Company']}")
+                st.markdown(f"🔗 [Apply Here]({job['Job Link']})")
+        else:
+            st.write("No job recommendations found. Try modifying your search criteria.")
+
+elif page == "Admin" and st.session_state.get("role") == "admin":
+    st.write("Admin Dashboard - Manage Users and Jobs")
+    # Additional admin functionalities can be added here.
+
+elif page == "Market Trends":
+    st.write("📊 Market Trends coming soon!")
