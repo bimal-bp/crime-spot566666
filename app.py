@@ -214,23 +214,26 @@ def dashboard_page():
 
 def admin_page():
     st.header("Admin Dashboard - Market Trends Management")
-    st.subheader("Enter Market Trend")
-    
-    trend_text = st.text_area("Market Trend Details")
+    st.write("Enter market trend details with a link to learn the skill.")
+
+    trend_text = st.text_area("Enter Market Trend Details")
+    skill_link = st.text_input("Skill Learning Link (e.g., Udemy, Coursera)")
+
     if st.button("Submit Trend"):
-        conn = get_db_connection()
-        if conn:
-            try:
+        if trend_text and skill_link:
+            conn = get_db_connection()
+            if conn:
                 cur = conn.cursor()
-                cur.execute("INSERT INTO market_trends (trend_text) VALUES (%s)", (trend_text,))
+                cur.execute("INSERT INTO market_trends (trend_text, skill_link) VALUES (%s, %s)", (trend_text, skill_link))
                 conn.commit()
                 cur.close()
                 conn.close()
                 st.success("Market trend submitted successfully!")
-            except Exception as e:
-                st.error(f"Error saving market trend: {e}")
+            else:
+                st.error("Database connection failed.")
         else:
-            st.error("Database connection error.")
+            st.error("Please enter both trend details and a skill link.")
+
 
 
 # ------------------- MAIN APP LOGIC -------------------
