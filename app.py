@@ -157,7 +157,10 @@ if page == "Home" and not st.session_state["logged_in"]:
         if st.button("Sign Up", key="signup_button"):
             if register_user(user_signup_email, user_signup_password):
                 st.success("Signup successful! Please log in.")
-                st.experimental_rerun()  # Re-run to update the UI
+                try:
+                    st.experimental_rerun()  # Re-run to update the UI
+                except AttributeError:
+                    st.stop()
             else:
                 st.error("Signup failed. Please try again.")
                 
@@ -170,7 +173,10 @@ if page == "Home" and not st.session_state["logged_in"]:
                 st.session_state["logged_in"] = True
                 st.session_state["role"] = role
                 st.success("Login successful!")
-                st.experimental_rerun()  # Force the app to re-run and update the navigation
+                try:
+                    st.experimental_rerun()  # Force the app to re-run and update the navigation
+                except AttributeError:
+                    st.stop()
             else:
                 st.error("Invalid credentials.")
 
@@ -185,7 +191,10 @@ if page == "Home" and not st.session_state["logged_in"]:
                 st.session_state["logged_in"] = True
                 st.session_state["role"] = role
                 st.success("Admin login successful!")
-                st.experimental_rerun()  # Re-run after admin login
+                try:
+                    st.experimental_rerun()  # Re-run after admin login
+                except AttributeError:
+                    st.stop()
             else:
                 st.error("Invalid admin credentials.")
 
