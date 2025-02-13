@@ -16,12 +16,7 @@ final_features = joblib.load("features.pkl")  # Load precomputed features
 def get_db_connection():
     try:
         return psycopg2.connect(
-            dbname="neondb",
-            user="neondb_owner",
-            password="npg_hnmkC3SAi7Lc",
-            host="ep-steep-dawn-a87fu2ow-pooler.eastus2.azure.neon.tech",
-            port="5432",
-            sslmode="require"
+            "postgresql://neondb_owner:npg_7JQelPFsVf2K@ep-purple-surf-a5w6dl4v-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
         )
     except Exception as e:
         st.error(f"Database connection error: {e}")
