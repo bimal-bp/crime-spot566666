@@ -178,7 +178,18 @@ def home_page():
                 st.error("Invalid admin credentials.")
 
 
-
+# fetch market trend
+def fetch_market_trends():
+    """Fetch market trends from the database"""
+    conn = get_db_connection()
+    if conn:
+        cur = conn.cursor()
+        cur.execute("SELECT trend_text, skill_link FROM market_trends")
+        trends = cur.fetchall()
+        cur.close()
+        conn.close()
+        return trends
+    return []
 # ------------------- USER DASHBOARD -------------------
 
 def dashboard_page():
@@ -205,10 +216,20 @@ def dashboard_page():
                     st.markdown(f"🔗 [Apply Here]({job['Job Link']})")
             else:
                 st.write("No job recommendations found. Try modifying your search criteria.")
-                
+    
     elif dashboard_option == "Market Trends":
-        st.header("Market Trends")
-        st.write("📊 Market Trends coming soon!")
+        st.header("📊 Market Trends")
+
+        # Fetch trends from the database
+        trends = fetch_market_trends()
+
+        if trends:
+            for trend_text, skill_link in trends:
+                st.subheader(trend_text)
+                st.markdown(f"🔗 [Learn More]({skill_link})", unsafe_allow_html=True)
+        else:
+            st.write("No market trends available yet.")
+
 
 # ------------------- ADMIN DASHBOARD -------------------
 
