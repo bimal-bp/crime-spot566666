@@ -7,14 +7,20 @@ import joblib
 import scipy.sparse as sp
 from sklearn.metrics.pairwise import cosine_similarity
 
+# ✅ Load Saved Models & Data
+vectorizer = joblib.load("vectorizer.pkl")
+scaler = joblib.load("scaler.pkl")
+df = joblib.load("df.pkl")  # Load saved DataFrame
+final_features = joblib.load("features.pkl")  # Load precomputed features
+
 # Database connection
 def get_db_connection():
     try:
         return psycopg2.connect(
             dbname="neondb",
             user="neondb_owner",
-            password="npg_7JQelPFsVf2K",
-            host="ep-purple-surf-a5w6dl4v-pooler.us-east-2.aws.neon.tech",
+            password="npg_hnmkC3SAi7Lc",
+            host="ep-steep-dawn-a87fu2ow-pooler.eastus2.azure.neon.tech",
             port="5432",
             sslmode="require"
         )
@@ -22,60 +28,41 @@ def get_db_connection():
         st.error(f"Database connection error: {e}")
         return None
 
-
-# Hash password
-def hash_password(password):
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-# Verify password
-def check_password(password, hashed):
-    return bcrypt.checkpw(password.encode(), hashed.encode())
-
-# Authenticate user
-def authenticate_user(email, password):
-    conn = get_db_connection()
-    if not conn:
-        return None
+# Job Recommendation Function
+def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
+    """Returns top N job recommendations with Company Name and Job Link."""
     
-    cur = conn.cursor()
-    cur.execute("SELECT password, role FROM users WHERE email = %s", (email,))
-    user = cur.fetchone()
-    conn.close()
-    
-    if user and check_password(password, user[0]):
-        return user[1]  # Return role (user/admin)
-    return None
+    job_desc = f"{job_title} in {section} with skills: {', '.join(skills)}"
+    user_text_vector = vectorizer.transform([job_desc])
 
-# Save new user
-def register_user(email, password):
-    conn = get_db_connection()
-    if not conn:
-        return False
-    
-    cur = conn.cursor()
-    try:
-        hashed_password = hash_password(password)
-        cur.execute("INSERT INTO users (email, password, role) VALUES (%s, %s, 'user')", (email, hashed_password))
-        conn.commit()
-        return True
-    except psycopg2.errors.UniqueViolation:
-        st.error("Email already exists. Please use a different email.")
-        return False
-    finally:
-        conn.close()
+    user_numeric_vector = pd.DataFrame([[experience, salary]], columns=["Experience", "Salary"])
+    user_numeric_vector = scaler.transform(user_numeric_vector)
+    user_numeric_vector = sp.csr_matrix(user_numeric_vector)
 
-# Parse field safely
-def parse_field(data):
-    if data is None:
-        return []
-    if isinstance(data, str):
-        try:
-            return ast.literal_eval(data)
-        except (ValueError, SyntaxError):
-            return [item.strip() for item in data.split(",")]
-    elif isinstance(data, list):
-        return data
-    return []
+    location_columns = [col for col in df.columns if col.startswith("location_")]
+    user_location_vector = sp.csr_matrix((1, len(location_columns)))
+
+    if locations:
+        user_location_df = pd.DataFrame(0, index=[0], columns=location_columns)
+        for location in locations:
+            location_column_name = f"location_{location.lower()}"
+            if location_column_name in user_location_df.columns:
+                user_location_df[location_column_name] = 1
+        user_location_vector = sp.csr_matrix(user_location_df.values)
+
+    user_vector = sp.hstack([user_text_vector, user_numeric_vector, user_location_vector])
+
+    similarity_scores = cosine_similarity(user_vector, final_features)
+    ranked_indices = similarity_scores.argsort()[0][::-1][:top_n]
+
+    recommended_jobs = [
+        {
+            "Company": df.iloc[i]["Company"],
+            "Job Link": df.iloc[i]["job_link"]
+        }
+        for i in ranked_indices
+    ]
+    return recommended_jobs
 
 # Streamlit UI
 st.title("🔍 Job Recommendation System")
@@ -113,20 +100,20 @@ elif page == "Dashboard" and st.session_state.get("logged_in"):
     salary = st.number_input("Expected Salary (in LPA)", min_value=0, max_value=100, value=15)
     available_locations = ["Pune", "Bangalore", "Hyderabad", "Mumbai", "Delhi", "Chennai"]
     selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
+    
     if st.button("Get Recommendations"):
         recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
+        
         if recommendations:
             st.subheader("Top Job Recommendations")
             for idx, job in enumerate(recommendations, start=1):
-                st.write(f"### 🔹 Recommendation {idx}")
-                st.write(f"🏢 **Company:** {job['Company']}")
+                st.write(f"🏢 *Company:* {job['Company']}")
                 st.markdown(f"🔗 [Apply Here]({job['Job Link']})")
         else:
             st.write("No job recommendations found. Try modifying your search criteria.")
 
 elif page == "Admin" and st.session_state.get("role") == "admin":
     st.write("Admin Dashboard - Manage Users and Jobs")
-    # Additional admin functionalities can be added here.
 
 elif page == "Market Trends":
     st.write("📊 Market Trends coming soon!")
