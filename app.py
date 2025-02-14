@@ -154,7 +154,6 @@ def fetch_market_trends():
     return []
 
 # ------------------- USER DASHBOARD -------------------
-
 import psycopg2
 import streamlit as st
 import pandas as pd
@@ -181,15 +180,14 @@ def create_table():
     cursor.close()
     conn.close()
 
-# Function to insert job recommendations into the database
-def save_job_recommendations(user_email, job_title, recommendations):
+# Function to insert a single job recommendation into the database
+def save_job_recommendation(user_email, job_title, company, job_link):
     conn = psycopg2.connect(DB_URL)
     cursor = conn.cursor()
-    for job in recommendations:
-        cursor.execute('''
-            INSERT INTO job_recommendations (user_email, job_title, company, job_link)
-            VALUES (%s, %s, %s, %s)
-        ''', (user_email, job_title, job.get("Company", "Unknown"), job.get("Job Link", "#")))
+    cursor.execute('''
+        INSERT INTO job_recommendations (user_email, job_title, company, job_link)
+        VALUES (%s, %s, %s, %s)
+    ''', (user_email, job_title, company, job_link))
     conn.commit()
     cursor.close()
     conn.close()
@@ -258,21 +256,23 @@ def dashboard_page():
         available_locations = ["Pune", "Bangalore", "Hyderabad", "Mumbai", "Delhi", "Chennai"]
         selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
 
-        if st.button("save & Get Recommendations"):
+        if st.button("Get Recommendations"):
             recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
 
             if recommendations:
                 st.subheader("Top Job Recommendations")
 
-                # Save jobs to the database
-                save_job_recommendations(user_email, job_title, recommendations)
-
-                # Display job recommendations
+                # Display job recommendations with a "Save" button for each job
                 for job in recommendations:
                     company = job.get("Company", "Unknown")
                     job_link = job.get("Job Link", "#")
                     st.write(f"🏢 **Company:** {company}")
                     st.markdown(f"🔗 [Apply Here]({job_link})")
+                    
+                    # Add a "Save" button for each job
+                    if st.button(f"Save {company} Job", key=job_link):
+                        save_job_recommendation(user_email, job_title, company, job_link)
+                        st.success(f"Saved job at {company}!")
             else:
                 st.write("No job recommendations found. Try modifying your search criteria.")
     
@@ -304,6 +304,7 @@ def dashboard_page():
 
 # Create table before running the app
 create_table()
+
 
 
 # ------------------- ADMIN DASHBOARD -------------------
