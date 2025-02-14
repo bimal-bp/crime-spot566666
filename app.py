@@ -244,7 +244,7 @@ def recommend_jobs(job_title, skills, section, experience, salary, locations, to
 # Dashboard Page
 def dashboard_page():
     st.sidebar.title("Dashboard Navigation")
-    dashboard_option = st.sidebar.radio("Select Option", ["Job Recommendations", "My Saved Jobs"])
+    dashboard_option = st.sidebar.radio("Select Option", ["Job Recommendations", "My Saved Jobs", "Market Trends"])
 
     if dashboard_option == "Job Recommendations":
         st.header("Job Recommendation Dashboard")
@@ -288,6 +288,19 @@ def dashboard_page():
                     st.markdown(f"🔗 [Apply Here]({job_link})")
             else:
                 st.write("No saved jobs found for this email.")
+
+    elif dashboard_option == "Market Trends":
+        st.header("📊 Market Trends")
+
+        # Fetch trends from the database
+        trends = fetch_market_trends()
+
+        if trends:
+            for trend_text, skill_link in trends:
+                st.subheader(trend_text)
+                st.markdown(f"🔗 [Learn More]({skill_link})", unsafe_allow_html=True)
+        else:
+            st.write("No market trends available yet.")
 
 # Create table before running the app
 create_table()
