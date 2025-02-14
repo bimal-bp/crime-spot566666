@@ -186,28 +186,16 @@ def create_table():
 
 # Function to insert a single job recommendation into the database
 def save_job_recommendation(user_email, job_title, company, job_link):
-    conn = get_db_connection()
-    if conn is None:
-        st.error("Failed to connect to the database.")
-        return
-    try:
-        cursor = conn.cursor()
-        query = '''
-            INSERT INTO job_recommendations (user_email, job_title, company, job_link)
-            VALUES (%s, %s, %s, %s)
-        '''
-        values = (user_email, job_title, company, job_link)
-        st.write(f"Executing query: {query}")
-        st.write(f"With values: {values}")
-        cursor.execute(query, values)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        st.success("Job saved successfully!")
-    except Exception as e:
-        st.error(f"Error saving job: {e}")
-        if conn:
-            conn.close()
+    conn = psycopg2.connect(DB_URL)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO job_recommendations (user_email, job_title, company, job_link)
+        VALUES (%s, %s, %s, %s)
+    ''', (user_email, job_title, company, job_link))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 # Function to fetch saved jobs for a user
 def get_saved_jobs(user_email):
     conn = get_db_connection()
