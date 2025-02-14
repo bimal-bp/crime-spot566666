@@ -16,7 +16,7 @@ final_features = joblib.load("features.pkl")  # Load precomputed features
 def get_db_connection():
     try:
         return psycopg2.connect(
-            "postgresql://neondb_owner:npg_7JQelPFsVf2K@ep-purple-surf-a5w6dl4v-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
+            "postgresql:t//neondb_owner:npg_7JQelPFsVf2K@ep-purple-surf-a5w6dl4v-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require"
         )
     except Exception as e:
         st.error(f"Database connection error: {e}")
@@ -92,7 +92,7 @@ def navigate_to(page):
 
 # ------------------- HOME PAGE -------------------
 
-def home_page():
+def thome_page():
     st.write("Welcome to the Job Recommendation System! Please log in or sign up to continue.")
     col1, col2 = st.columns(2)
 
