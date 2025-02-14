@@ -72,72 +72,63 @@ def authenticate_user(email, password):
         conn.close()
 
 # ------------------- JOB RECOMMENDATION FUNCTION -------------------
-import psycopg2
-import streamlit as st
-
-DATABASE_URL = "postgresql://neondb_owner:npg_hnmkC3SAi7Lc@ep-steep-dawn-a87fu2ow-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
 
 def save_to_postgresql(recommended_jobs, job_title, section, skills, experience, salary, locations):
     """Saves job recommendations to PostgreSQL database."""
+    conn = None
     try:
         # Connect to PostgreSQL
-        conn = psycopg2.connect(DATABASE_URL)
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        if conn is None:
+            return
 
-        # Ensure table exists
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS job_recommendations (
-            id SERIAL PRIMARY KEY,
-            company_name TEXT,
-            job_link TEXT,
-            job_title TEXT,
-            section TEXT,
-            skills TEXT,
-            experience TEXT,
-            salary TEXT,
-            locations TEXT
-        )
-        """)
-
-        # Insert each recommended job into the database
-        for job in recommended_jobs:
-            query = """
-            INSERT INTO job_recommendations 
-            (company_name, job_link, job_title, section, skills, experience, salary, locations) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            values = (
-                job["Company"],
-                job["Job Link"],
-                job_title,
-                section,
-                ", ".join(skills),
-                experience,
-                salary,
-                ", ".join(locations)
+        with conn.cursor() as cur:
+            # Ensure table exists
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS job_recommendations (
+                id SERIAL PRIMARY KEY,
+                company_name TEXT,
+                job_link TEXT,
+                job_title TEXT,
+                section TEXT,
+                skills TEXT,
+                experience TEXT,
+                salary TEXT,
+                locations TEXT
             )
+            """)
 
-            print("Executing query:", query)  # Debugging
-            print("With values:", values)  # Debugging
+            # Insert each recommended job into the database
+            for job in recommended_jobs:
+                query = """
+                INSERT INTO job_recommendations 
+                (company_name, job_link, job_title, section, skills, experience, salary, locations) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                values = (
+                    job["Company"],
+                    job["Job Link"],
+                    job_title,
+                    section,
+                    ", ".join(skills),
+                    str(experience),
+                    str(salary),
+                    ", ".join(locations)
+                )
 
-            cursor.execute(query, values)
+                cur.execute(query, values)
 
-        # Commit changes
-        conn.commit()
-        cursor.close()
-        conn.close()
-
+            # Commit changes
+            conn.commit()
         st.success("✅ Job recommendations saved successfully!")
 
     except psycopg2.Error as e:
-        print(f"Database error: {e}")  # Debugging
         st.error(f"❌ Database error: {e}")
-
     except Exception as e:
-        print(f"Error: {e}")  # Debugging
         st.error(f"❌ Error: {e}")
-
-
+    finally:
+        if conn:
+            conn.close()
 
 def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
     """Returns top N job recommendations with Company Name and Job Link."""
@@ -259,6 +250,9 @@ def dashboard_page():
                 for idx, job in enumerate(recommendations, start=1):
                     st.write(f"🏢 **Company:** {job['Company']}")
                     st.markdown(f"🔗 [Apply Here]({job['Job Link']})")
+                
+                # Save recommendations to the database
+                save_to_postgresql(recommendations, job_title, section, skills, experience, salary, selected_locations)
             else:
                 st.write("No job recommendations found. Try modifying your search criteria.")
     
