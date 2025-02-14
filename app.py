@@ -158,7 +158,6 @@ def fetch_market_trends():
         return trends
     return []
 # ------------------- USER DASHBOARD -------------------
-
 import psycopg2
 import streamlit as st
 
@@ -173,7 +172,8 @@ def create_table():
         CREATE TABLE IF NOT EXISTS job_recommendations (
             id SERIAL PRIMARY KEY,
             job_title TEXT NOT NULL,
-            company TEXT NOT NULL
+            company TEXT NOT NULL,
+            job_link TEXT NOT NULL
         )
     ''')
     conn.commit()
@@ -186,9 +186,9 @@ def save_job_recommendations(job_title, recommendations):
     cursor = conn.cursor()
     for job in recommendations:
         cursor.execute('''
-            INSERT INTO job_recommendations (job_title, company)
-            VALUES (%s, %s)
-        ''', (job_title, job['Company']))
+            INSERT INTO job_recommendations (job_title, company, job_link)
+            VALUES (%s, %s, %s)
+        ''', (job.get("Title", "Unknown"), job.get("Company", "Unknown"), job.get("Job Link", "#")))
     conn.commit()
     cursor.close()
     conn.close()
@@ -246,16 +246,25 @@ def dashboard_page():
 
         if st.button("Get Recommendations"):
             recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
+
             if recommendations:
-                save_job_recommendations(job_title, recommendations)
                 st.subheader("Top Job Recommendations")
+
+                # Save jobs to the database
+                save_job_recommendations(job_title, recommendations)
+
+                # Display job recommendations
                 for job in recommendations:
-                    st.write(f"🏢 **Company:** {job['Company']} | **Job Title:** {job['Job Title']}")
-                st.success("Job recommendations saved successfully!")
+                    company = job.get("Company", "Unknown")
+                    title = job.get("Title", "Unknown")
+                    job_link = job.get("Job Link", "#")
+
+                    st.write(f"🏢 **Company:** {company} | **Job Title:** {title}")
+                    st.markdown(f"🔗 [Apply Here]({job_link})")
             else:
                 st.write("No job recommendations found. Try modifying your search criteria.")
 
-# Initialize the database table
+# Create table before running the app
 create_table()
 
 
