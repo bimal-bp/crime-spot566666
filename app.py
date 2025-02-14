@@ -258,7 +258,7 @@ def dashboard_page():
         available_locations = ["Pune", "Bangalore", "Hyderabad", "Mumbai", "Delhi", "Chennai"]
         selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
 
-        if st.button("Get Recommendations"):
+        if st.button("save & Get Recommendations"):
             recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
 
             if recommendations:
