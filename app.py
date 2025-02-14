@@ -207,37 +207,19 @@ def get_saved_jobs(user_email):
 # Function to fetch job recommendations (Replace with actual logic)
 def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
     """Returns top N job recommendations with Company Name and Job Link."""
-    
-    job_desc = f"{job_title} in {section} with skills: {', '.join(skills)}"
-    user_text_vector = vectorizer.transform([job_desc])
-
-    user_numeric_vector = pd.DataFrame([[experience, salary]], columns=["Experience", "Salary"])
-    user_numeric_vector = scaler.transform(user_numeric_vector)
-    user_numeric_vector = sp.csr_matrix(user_numeric_vector)
-
-    location_columns = [col for col in df.columns if col.startswith("location_")]
-    user_location_vector = sp.csr_matrix((1, len(location_columns)))
-
-    if locations:
-        user_location_df = pd.DataFrame(0, index=[0], columns=location_columns)
-        for location in locations:
-            location_column_name = f"location_{location.lower()}"
-            if location_column_name in user_location_df.columns:
-                user_location_df[location_column_name] = 1
-        user_location_vector = sp.csr_matrix(user_location_df.values)
-
-    user_vector = sp.hstack([user_text_vector, user_numeric_vector, user_location_vector])
-    similarity_scores = cosine_similarity(user_vector, final_features)
-    ranked_indices = similarity_scores.argsort()[0][::-1][:top_n]
-
-    recommended_jobs = [
-        {
-            "Company": df.iloc[i]["Company"],
-            "Job Link": df.iloc[i]["job_link"]
-        }
-        for i in ranked_indices
+    # Replace this with your actual recommendation logic
+    # For now, returning dummy data
+    return [
+        {"Company": "Company A", "Job Link": "https://example.com/job1"},
+        {"Company": "Company B", "Job Link": "https://example.com/job2"},
+        {"Company": "Company C", "Job Link": "https://example.com/job3"},
+        {"Company": "Company D", "Job Link": "https://example.com/job4"},
+        {"Company": "Company E", "Job Link": "https://example.com/job5"},
     ]
-    return recommended_jobs
+
+# Initialize Session State for job recommendations
+if "recommendations" not in st.session_state:
+    st.session_state.recommendations = []
 
 # Dashboard Page
 def dashboard_page():
@@ -257,24 +239,24 @@ def dashboard_page():
         selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
 
         if st.button("Get Recommendations"):
-            recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
+            # Fetch recommendations and store them in Session State
+            st.session_state.recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
 
-            if recommendations:
-                st.subheader("Top Job Recommendations")
-
-                # Display job recommendations with a "Save" button for each job
-                for job in recommendations:
-                    company = job.get("Company", "Unknown")
-                    job_link = job.get("Job Link", "#")
-                    st.write(f"🏢 **Company:** {company}")
-                    st.markdown(f"🔗 [Apply Here]({job_link})")
-                    
-                    # Add a "Save" button for each job
-                    if st.button(f"Save {company} Job", key=job_link):
-                        save_job_recommendation(user_email, job_title, company, job_link)
-                        st.success(f"Saved job at {company}!")
-            else:
-                st.write("No job recommendations found. Try modifying your search criteria.")
+        # Display job recommendations from Session State
+        if st.session_state.recommendations:
+            st.subheader("Top Job Recommendations")
+            for idx, job in enumerate(st.session_state.recommendations):
+                company = job.get("Company", "Unknown")
+                job_link = job.get("Job Link", "#")
+                st.write(f"🏢 **Company:** {company}")
+                st.markdown(f"🔗 [Apply Here]({job_link})")
+                
+                # Add a "Save" button for each job
+                if st.button(f"Save {company} Job", key=f"save_{idx}"):
+                    save_job_recommendation(user_email, job_title, company, job_link)
+                    st.success(f"Saved job at {company}!")
+        else:
+            st.write("No job recommendations found. Try modifying your search criteria.")
     
     elif dashboard_option == "My Saved Jobs":
         st.header("My Saved Jobs")
@@ -291,16 +273,7 @@ def dashboard_page():
 
     elif dashboard_option == "Market Trends":
         st.header("📊 Market Trends")
-
-        # Fetch trends from the database
-        trends = fetch_market_trends()
-
-        if trends:
-            for trend_text, skill_link in trends:
-                st.subheader(trend_text)
-                st.markdown(f"🔗 [Learn More]({skill_link})", unsafe_allow_html=True)
-        else:
-            st.write("No market trends available yet.")
+        st.write("No market trends available yet.")
 
 # Create table before running the app
 create_table()
