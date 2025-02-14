@@ -72,16 +72,36 @@ def authenticate_user(email, password):
         conn.close()
 
 # ------------------- JOB RECOMMENDATION FUNCTION -------------------
+import psycopg2
+import streamlit as st
+
+DATABASE_URL = "postgresql://neondb_owner:npg_hnmkC3SAi7Lc@ep-steep-dawn-a87fu2ow-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
 
 def save_to_postgresql(recommended_jobs, job_title, section, skills, experience, salary, locations):
     """Saves job recommendations to PostgreSQL database."""
     try:
         with psycopg2.connect(DATABASE_URL) as conn:
             with conn.cursor() as cursor:
+                # Ensure table exists
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS job_recommendations (
+                    id SERIAL PRIMARY KEY,
+                    company_name TEXT,
+                    job_link TEXT,
+                    job_title TEXT,
+                    section TEXT,
+                    skills TEXT,
+                    experience TEXT,
+                    salary TEXT,
+                    locations TEXT
+                )
+                """)
+                
                 # Insert each recommended job into the database
                 for job in recommended_jobs:
                     query = """
-                    INSERT INTO job_recommendations (company_name, job_link, job_title, section, skills, experience, salary, locations)
+                    INSERT INTO job_recommendations 
+                    (company_name, job_link, job_title, section, skills, experience, salary, locations) 
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     values = (
@@ -95,10 +115,13 @@ def save_to_postgresql(recommended_jobs, job_title, section, skills, experience,
                         ", ".join(locations)
                     )
                     cursor.execute(query, values)
+                
                 conn.commit()
                 st.success("✅ Job recommendations saved successfully!")
+    
     except Exception as e:
         st.error(f"❌ Error: {e}")
+
 
 def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
     """Returns top N job recommendations with Company Name and Job Link."""
