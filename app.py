@@ -260,25 +260,24 @@ def dashboard_page():
         selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
 
         if st.button("Get Recommendations"):
-            recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
+            # Fetch recommendations and store them in Session State
+            st.session_state.recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
 
-            if recommendations:
-                st.subheader("Top Job Recommendations")
-
-                # Display job recommendations with a "Save" button for each job
-                for job in recommendations:
-                    company = job.get("Company", "Unknown")
-                    job_link = job.get("Job Link", "#")
-                    st.write(f"🏢 **Company:** {company}")
-                    st.markdown(f"🔗 [Apply Here]({job_link})")
-                    
-                    # Add a "Save" button for each job
-                    if st.button(f"Save {company} Job", key=job_link):
-                        save_job_recommendation(user_email, job_title, company, job_link)
-                        st.session_state["saved_jobs"].append((job_title, company, job_link))
-                        st.success(f"Saved job at {company}!")
-            else:
-                st.write("No job recommendations found. Try modifying your search criteria.")
+        # Display job recommendations from Session State
+        if st.session_state.recommendations:
+            st.subheader("Top Job Recommendations")
+            for idx, job in enumerate(st.session_state.recommendations):
+                company = job.get("Company", "Unknown")
+                job_link = job.get("Job Link", "#")
+                st.write(f"🏢 **Company:** {company}")
+                st.markdown(f"🔗 [Apply Here]({job_link})")
+                
+                # Add a "Save" button for each job
+                if st.button(f"Save {company} Job", key=f"save_{idx}"):
+                    save_job_recommendation(user_email, job_title, company, job_link)
+                    st.success(f"Saved job at {company}!")
+        else:
+            st.write("No job recommendations found. Try modifying your search criteria.")
     
     elif dashboard_option == "My Saved Jobs":
         st.header("My Saved Jobs")
