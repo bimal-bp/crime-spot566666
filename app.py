@@ -137,6 +137,7 @@ def home_page():
                 st.session_state["logged_in"] = True
                 st.session_state["role"] = "admin"
                 st.success("Admin login successful!")
+                navigate_to("Admin")
             else:
                 st.error("Invalid admin credentials.")
 
@@ -154,18 +155,10 @@ def fetch_market_trends():
     return []
 
 # ------------------- USER DASHBOARD -------------------
-import psycopg2
-import streamlit as st
-import pandas as pd
-import scipy.sparse as sp
-from sklearn.metrics.pairwise import cosine_similarity
-
-# Database connection details
-DB_URL = "postgresql://neondb_owner:npg_hnmkC3SAi7Lc@ep-steep-dawn-a87fu2ow-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
 
 # Function to create the table in PostgreSQL
 def create_table():
-    conn = psycopg2.connect(DB_URL)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS job_recommendations (
@@ -176,13 +169,20 @@ def create_table():
             job_link TEXT NOT NULL
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS market_trends (
+            id SERIAL PRIMARY KEY,
+            trend_text TEXT NOT NULL,
+            skill_link TEXT NOT NULL
+        )
+    ''')
     conn.commit()
     cursor.close()
     conn.close()
 
 # Function to insert a single job recommendation into the database
 def save_job_recommendation(user_email, job_title, company, job_link):
-    conn = psycopg2.connect(DB_URL)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO job_recommendations (user_email, job_title, company, job_link)
@@ -194,7 +194,7 @@ def save_job_recommendation(user_email, job_title, company, job_link):
 
 # Function to fetch saved jobs for a user
 def get_saved_jobs(user_email):
-    conn = psycopg2.connect(DB_URL)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
         SELECT job_title, company, job_link FROM job_recommendations WHERE user_email = %s
@@ -204,8 +204,7 @@ def get_saved_jobs(user_email):
     conn.close()
     return jobs
 
-# Function to fetch job recommendations (Replace with actual logic)
-
+# Function to fetch job recommendations
 def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
     """Returns top N job recommendations with Company Name and Job Link."""
     
@@ -262,15 +261,12 @@ def dashboard_page():
 
             if recommendations:
                 st.subheader("Top Job Recommendations")
-
-                # Display job recommendations with a "Save" button for each job
                 for job in recommendations:
                     company = job.get("Company", "Unknown")
                     job_link = job.get("Job Link", "#")
                     st.write(f"🏢 **Company:** {company}")
                     st.markdown(f"🔗 [Apply Here]({job_link})")
                     
-                    # Add a "Save" button for each job
                     if st.button(f"Save {company} Job", key=job_link):
                         save_job_recommendation(user_email, job_title, company, job_link)
                         st.success(f"Saved job at {company}!")
@@ -292,91 +288,13 @@ def dashboard_page():
 
     elif dashboard_option == "Market Trends":
         st.header("📊 Market Trends")
-
-        # Fetch trends from the database
         trends = fetch_market_trends()
-
         if trends:
             for trend_text, skill_link in trends:
                 st.subheader(trend_text)
                 st.markdown(f"🔗 [Learn More]({skill_link})", unsafe_allow_html=True)
         else:
             st.write("No market trends available yet.")
-
-# Create table before running the app
-create_table()
-
-# Initialize Session State for job recommendations
-if "recommendations" not in st.session_state:
-    st.session_state.recommendations = []
-
-# Dashboard Page
-def dashboard_page():
-    st.sidebar.title("Dashboard Navigation")
-    dashboard_option = st.sidebar.radio("Select Option", ["Job Recommendations", "My Saved Jobs", "Market Trends"])
-
-    if dashboard_option == "Job Recommendations":
-        st.header("Job Recommendation Dashboard")
-        user_email = st.text_input("Enter your email")
-        job_title = st.text_input("Job Title", "DevOps Engineer")
-        skills_input = st.text_area("Skills (comma separated)", "Docker, Kubernetes")
-        skills = [skill.strip() for skill in skills_input.split(",") if skill.strip()]
-        section = st.text_input("Job Section", "IT")
-        experience = st.number_input("Years of Experience", min_value=0, max_value=50, value=5)
-        salary = st.number_input("Expected Salary (in LPA)", min_value=0, max_value=100, value=15)
-        available_locations = ["Pune", "Bangalore", "Hyderabad", "Mumbai", "Delhi", "Chennai"]
-        selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
-
-        if st.button("Get Recommendations"):
-            # Fetch recommendations and store them in Session State
-            st.session_state.recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
-
-        # Display job recommendations from Session State
-        if st.session_state.recommendations:
-            st.subheader("Top Job Recommendations")
-            for idx, job in enumerate(st.session_state.recommendations):
-                company = job.get("Company", "Unknown")
-                job_link = job.get("Job Link", "#")
-                st.write(f"🏢 **Company:** {company}")
-                st.markdown(f"🔗 [Apply Here]({job_link})")
-                
-                # Add a "Save" button for each job
-                if st.button(f"Save {company} Job", key=f"save_{idx}"):
-                    save_job_recommendation(user_email, job_title, company, job_link)
-                    st.success(f"Saved job at {company}!")
-        else:
-            st.write("No job recommendations found. Try modifying your search criteria.")
-    
-    elif dashboard_option == "My Saved Jobs":
-        st.header("My Saved Jobs")
-        user_email = st.text_input("Enter your email to retrieve saved jobs")
-        if st.button("Fetch My Saved Jobs"):
-            saved_jobs = get_saved_jobs(user_email)
-            if saved_jobs:
-                st.subheader("Your Saved Jobs")
-                for job_title, company, job_link in saved_jobs:
-                    st.write(f"🏢 **Company:** {company} | **Job Title:** {job_title}")
-                    st.markdown(f"🔗 [Apply Here]({job_link})")
-            else:
-                st.write("No saved jobs found for this email.")
-
-    elif dashboard_option == "Market Trends":
-def fetch_market_trends():
-    """Fetch market trends from the database"""
-    conn = get_db_connection()
-    if conn:
-        cur = conn.cursor()
-        cur.execute("SELECT trend_text, skill_link FROM market_trends")
-        trends = cur.fetchall()
-        cur.close()
-        conn.close()
-        return trends
-    return []
-
-# Create table before running the app
-create_table()
-
-
 
 # ------------------- ADMIN DASHBOARD -------------------
 
@@ -403,6 +321,9 @@ def admin_page():
             st.error("Please enter both trend details and a skill link.")
 
 # ------------------- MAIN APP LOGIC -------------------
+
+# Create table before running the app
+create_table()
 
 st.title("🔍 Job Recommendation System")
 
