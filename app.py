@@ -84,6 +84,8 @@ if "role" not in st.session_state:
     st.session_state["role"] = None
 if "page" not in st.session_state:
     st.session_state["page"] = "Home"
+if "saved_jobs" not in st.session_state:
+    st.session_state["saved_jobs"] = []
 
 # ------------------- PAGE NAVIGATION -------------------
 
@@ -273,6 +275,7 @@ def dashboard_page():
                     # Add a "Save" button for each job
                     if st.button(f"Save {company} Job", key=job_link):
                         save_job_recommendation(user_email, job_title, company, job_link)
+                        st.session_state["saved_jobs"].append((job_title, company, job_link))
                         st.success(f"Saved job at {company}!")
             else:
                 st.write("No job recommendations found. Try modifying your search criteria.")
