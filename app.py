@@ -210,14 +210,23 @@ def save_job_recommendation(user_email, job_title, company, job_link):
 # Function to fetch saved jobs for a user
 def get_saved_jobs(user_email):
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT job_title, company, job_link FROM job_recommendations WHERE user_email = %s
-    ''', (user_email,))
-    jobs = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return jobs
+    if conn is None:
+        st.error("Failed to connect to the database.")
+        return []
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT job_title, company, job_link FROM job_recommendations WHERE user_email = %s
+        ''', (user_email,))
+        jobs = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jobs
+    except Exception as e:
+        st.error(f"Error fetching saved jobs: {e}")
+        if conn:
+            conn.close()
+        return []
 
 # Function to fetch job recommendations
 def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
