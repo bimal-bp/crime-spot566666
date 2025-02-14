@@ -162,12 +162,19 @@ def recommend_jobs(job_title, skills, section, experience, salary, locations, to
     return recommended_jobs
 
 
-# Get recommended jobs dynamically
+# Collect user input
+job_title = input("Enter the job title you are looking for (e.g., Software Engineer): ")
+skills = input("Enter your skills (comma-separated, e.g., Python, Machine Learning, SQL): ").split(", ")
+section = input("Enter the job section/industry (e.g., Technology): ")
+experience = int(input("Enter your years of experience (e.g., 3): "))
+salary = int(input("Enter your expected salary (e.g., 90000): "))
+locations = input("Enter preferred locations (comma-separated, e.g., New York, San Francisco): ").split(", ")
+
+# Call the recommend_jobs function with user input
 recommended_jobs = recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5)
 
 # Save to PostgreSQL
 save_to_postgresql(recommended_jobs, job_title, section, skills, experience, salary, locations)
-
 
 
 
