@@ -1,4 +1,3 @@
-
 import streamlit as st
 import psycopg2
 import bcrypt
@@ -30,106 +29,79 @@ def register_user(email, password):
     if conn is None:
         return False
     try:
-        cur = conn.cursor()
-        # Check if user already exists:
-        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-        if cur.fetchone():
-            st.error("User already exists. Please log in.")
-            cur.close()
-            conn.close()
-            return False
+        with conn.cursor() as cur:
+            # Check if user already exists
+            cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+            if cur.fetchone():
+                st.error("User already exists. Please log in.")
+                return False
 
-        # Hash the password:
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        # Insert new user with default role 'user'
-        cur.execute(
-            "INSERT INTO users (email, password, role) VALUES (%s, %s, %s)",
-            (email, hashed_password, "user")
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
+            # Hash the password
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            # Insert new user with default role 'user'
+            cur.execute(
+                "INSERT INTO users (email, password, role) VALUES (%s, %s, %s)",
+                (email, hashed_password, "user")
+            )
+            conn.commit()
         return True
     except Exception as e:
         st.error(f"Error during registration: {e}")
         return False
+    finally:
+        conn.close()
 
 def authenticate_user(email, password):
     conn = get_db_connection()
     if conn is None:
         return None
     try:
-        cur = conn.cursor()
-        cur.execute("SELECT password, role FROM users WHERE email = %s", (email,))
-        result = cur.fetchone()
-        cur.close()
-        conn.close()
-        if result:
-            stored_password, role = result
-            # Compare the provided password with the stored hashed password.
-            if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
-                return role
-            else:
-                return None
-        else:
+        with conn.cursor() as cur:
+            cur.execute("SELECT password, role FROM users WHERE email = %s", (email,))
+            result = cur.fetchone()
+            if result:
+                stored_password, role = result
+                # Compare the provided password with the stored hashed password
+                if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
+                    return role
             return None
     except Exception as e:
         st.error(f"Error during authentication: {e}")
         return None
+    finally:
+        conn.close()
 
 # ------------------- JOB RECOMMENDATION FUNCTION -------------------
 
-import psycopg2
-import pandas as pd
-import scipy.sparse as sp
-from sklearn.metrics.pairwise import cosine_similarity
-
-# Database connection string
-DATABASE_URL = "postgresql://neondb_owner:npg_hnmkC3SAi7Lc@ep-steep-dawn-a87fu2ow-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
-
 def save_to_postgresql(recommended_jobs, job_title, section, skills, experience, salary, locations):
     """Saves job recommendations to PostgreSQL database."""
-    
     try:
-        # Connect to the database
-        connection = psycopg2.connect(DATABASE_URL)
-        cursor = connection.cursor()
-
-        # Insert each recommended job into the database
-        for job in recommended_jobs:
-            query = """
-            INSERT INTO job_recommendations (company_name, job_link, job_title, section, skills, experience, salary, locations)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            values = (
-                job["Company"],
-                job["Job Link"],
-                job_title,
-                section,
-                ", ".join(skills),
-                experience,
-                salary,
-                ", ".join(locations)
-            )
-            cursor.execute(query, values)
-
-        # Commit the transaction
-        connection.commit()
-        print("✅ Job recommendations saved successfully!")
-
+        with psycopg2.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cursor:
+                # Insert each recommended job into the database
+                for job in recommended_jobs:
+                    query = """
+                    INSERT INTO job_recommendations (company_name, job_link, job_title, section, skills, experience, salary, locations)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    values = (
+                        job["Company"],
+                        job["Job Link"],
+                        job_title,
+                        section,
+                        ", ".join(skills),
+                        experience,
+                        salary,
+                        ", ".join(locations)
+                    )
+                    cursor.execute(query, values)
+                conn.commit()
+                st.success("✅ Job recommendations saved successfully!")
     except Exception as e:
-        print("❌ Error:", e)
-
-    finally:
-        # Close the database connection
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
+        st.error(f"❌ Error: {e}")
 
 def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
     """Returns top N job recommendations with Company Name and Job Link."""
-    
     job_desc = f"{job_title} in {section} with skills: {', '.join(skills)}"
     user_text_vector = vectorizer.transform([job_desc])
 
@@ -161,23 +133,6 @@ def recommend_jobs(job_title, skills, section, experience, salary, locations, to
     ]
     return recommended_jobs
 
-
-# Collect user input
-job_title = input("Enter the job title you are looking for (e.g., Software Engineer): ")
-skills = input("Enter your skills (comma-separated, e.g., Python, Machine Learning, SQL): ").split(", ")
-section = input("Enter the job section/industry (e.g., Technology): ")
-experience = int(input("Enter your years of experience (e.g., 3): "))
-salary = int(input("Enter your expected salary (e.g., 90000): "))
-locations = input("Enter preferred locations (comma-separated, e.g., New York, San Francisco): ").split(", ")
-
-# Call the recommend_jobs function with user input
-recommended_jobs = recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5)
-
-# Save to PostgreSQL
-save_to_postgresql(recommended_jobs, job_title, section, skills, experience, salary, locations)
-
-
-
 # ------------------- SESSION STATE INITIALIZATION -------------------
 
 if "logged_in" not in st.session_state:
@@ -208,7 +163,6 @@ def home_page():
         if st.button("Sign Up", key="signup_button"):
             if register_user(user_signup_email, user_signup_password):
                 st.success("Signup successful! Please log in.")
-                navigate_to("Home")  # Stay on home page to allow login
             else:
                 st.error("Signup failed. Please try again.")
                 
@@ -242,19 +196,6 @@ def home_page():
             else:
                 st.error("Invalid admin credentials.")
 
-
-# fetch market trend
-def fetch_market_trends():
-    """Fetch market trends from the database"""
-    conn = get_db_connection()
-    if conn:
-        cur = conn.cursor()
-        cur.execute("SELECT trend_text, skill_link FROM market_trends")
-        trends = cur.fetchall()
-        cur.close()
-        conn.close()
-        return trends
-    return []
 # ------------------- USER DASHBOARD -------------------
 
 def dashboard_page():
@@ -284,17 +225,13 @@ def dashboard_page():
     
     elif dashboard_option == "Market Trends":
         st.header("📊 Market Trends")
-
-        # Fetch trends from the database
         trends = fetch_market_trends()
-
         if trends:
             for trend_text, skill_link in trends:
                 st.subheader(trend_text)
                 st.markdown(f"🔗 [Learn More]({skill_link})", unsafe_allow_html=True)
         else:
             st.write("No market trends available yet.")
-
 
 # ------------------- ADMIN DASHBOARD -------------------
 
@@ -309,18 +246,14 @@ def admin_page():
         if trend_text and skill_link:
             conn = get_db_connection()
             if conn:
-                cur = conn.cursor()
-                cur.execute("INSERT INTO market_trends (trend_text, skill_link) VALUES (%s, %s)", (trend_text, skill_link))
-                conn.commit()
-                cur.close()
-                conn.close()
+                with conn.cursor() as cur:
+                    cur.execute("INSERT INTO market_trends (trend_text, skill_link) VALUES (%s, %s)", (trend_text, skill_link))
+                    conn.commit()
                 st.success("Market trend submitted successfully!")
             else:
                 st.error("Database connection failed.")
         else:
             st.error("Please enter both trend details and a skill link.")
-
-
 
 # ------------------- MAIN APP LOGIC -------------------
 
