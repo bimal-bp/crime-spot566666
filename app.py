@@ -281,19 +281,21 @@ def dashboard_page():
         selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
 
         if st.button("Get Recommendations"):
-            st.session_state["recommendations"] = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
+            # Fetch recommendations and store them in Session State
+            st.session_state.recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
 
-        if st.session_state["recommendations"]:
+        # Display job recommendations from Session State
+        if st.session_state.recommendations:
             st.subheader("Top Job Recommendations")
-            for idx, job in enumerate(st.session_state["recommendations"]):
+            for idx, job in enumerate(st.session_state.recommendations):
                 company = job.get("Company", "Unknown")
                 job_link = job.get("Job Link", "#")
                 st.write(f"🏢 **Company:** {company}")
                 st.markdown(f"🔗 [Apply Here]({job_link})")
                 
+                # Add a "Save" button for each job
                 if st.button(f"Save {company} Job", key=f"save_{idx}"):
                     save_job_recommendation(user_email, job_title, company, job_link)
-                    st.session_state["saved_jobs"].append((job_title, company, job_link))
                     st.success(f"Saved job at {company}!")
         else:
             st.write("No job recommendations found. Try modifying your search criteria.")
@@ -302,19 +304,21 @@ def dashboard_page():
         st.header("My Saved Jobs")
         user_email = st.text_input("Enter your email to retrieve saved jobs")
         if st.button("Fetch My Saved Jobs"):
-            st.session_state["saved_jobs"] = get_saved_jobs(user_email)
-
-        if st.session_state["saved_jobs"]:
-            st.subheader("Your Saved Jobs")
-            for job_title, company, job_link in st.session_state["saved_jobs"]:
-                st.write(f"🏢 **Company:** {company} | **Job Title:** {job_title}")
-                st.markdown(f"🔗 [Apply Here]({job_link})")
-        else:
-            st.write("No saved jobs found for this email.")
+            saved_jobs = get_saved_jobs(user_email)
+            if saved_jobs:
+                st.subheader("Your Saved Jobs")
+                for job_title, company, job_link in saved_jobs:
+                    st.write(f"🏢 **Company:** {company} | **Job Title:** {job_title}")
+                    st.markdown(f"🔗 [Apply Here]({job_link})")
+            else:
+                st.write("No saved jobs found for this email.")
 
     elif dashboard_option == "Market Trends":
         st.header("📊 Market Trends")
+
+        # Fetch trends from the database
         trends = fetch_market_trends()
+
         if trends:
             for trend_text, skill_link in trends:
                 st.subheader(trend_text)
