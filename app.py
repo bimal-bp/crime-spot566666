@@ -361,8 +361,17 @@ def dashboard_page():
                 st.write("No saved jobs found for this email.")
 
     elif dashboard_option == "Market Trends":
-        st.header("📊 Market Trends")
-        st.write("No market trends available yet.")
+def fetch_market_trends():
+    """Fetch market trends from the database"""
+    conn = get_db_connection()
+    if conn:
+        cur = conn.cursor()
+        cur.execute("SELECT trend_text, skill_link FROM market_trends")
+        trends = cur.fetchall()
+        cur.close()
+        conn.close()
+        return trends
+    return []
 
 # Create table before running the app
 create_table()
