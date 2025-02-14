@@ -4,4 +4,5 @@ bcrypt
 pandas
 joblib
 scipy
-scikit-learn
+scikit-learn==1.6.0
+
