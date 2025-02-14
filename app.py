@@ -79,6 +79,36 @@ def authenticate_user(email, password):
 
 # ------------------- JOB RECOMMENDATION FUNCTION -------------------
 
+import psycopg2
+import pandas as pd
+import numpy as np
+import scipy.sparse as sp
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Database connection string
+DATABASE_URL = "postgresql://neondb_owner:npg_hnmkC3SAi7Lc@ep-steep-dawn-a87fu2ow-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
+
+# Load sample job data (Replace this with your actual dataset)
+
+
+# Text vectorization
+vectorizer = TfidfVectorizer()
+text_features = vectorizer.fit_transform(df["job_desc"])
+
+# Scaling numeric features
+scaler = StandardScaler()
+numeric_features = scaler.fit_transform(df[["Experience", "Salary"]])
+numeric_features = sp.csr_matrix(numeric_features)
+
+# One-hot encoding locations
+location_features = sp.csr_matrix(df.iloc[:, 3:].values)
+
+# Combine all features
+final_features = sp.hstack([text_features, numeric_features, location_features])
+
+
 def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
     """Returns top N job recommendations with Company Name and Job Link."""
     
@@ -111,7 +141,69 @@ def recommend_jobs(job_title, skills, section, experience, salary, locations, to
         }
         for i in ranked_indices
     ]
+    
+    # Save recommendations to the database
+    save_to_postgresql(recommended_jobs, job_title, section, skills, experience, salary, locations)
+
     return recommended_jobs
+
+
+def save_to_postgresql(recommended_jobs, job_title, section, skills, experience, salary, locations):
+    """Saves job recommendations to PostgreSQL database."""
+    
+    try:
+        connection = psycopg2.connect(DATABASE_URL)
+        cursor = connection.cursor()
+
+        for job in recommended_jobs:
+            query = """
+            INSERT INTO job_recommendations (company_name, job_link, job_title, section, skills, experience, salary, locations)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            values = (
+                job["Company"],
+                job["Job Link"],
+                job_title,
+                section,
+                ", ".join(skills),
+                experience,
+                salary,
+                ", ".join(locations)
+            )
+            cursor.execute(query, values)
+
+        connection.commit()
+        print("✅ Job recommendations saved successfully!")
+
+    except Exception as e:
+        print("❌ Error:", e)
+
+    finally:
+        cursor.close()
+        connection.close()
+
+
+def get_saved_jobs():
+    """Fetches saved job recommendations from PostgreSQL."""
+    
+    try:
+        connection = psycopg2.connect(DATABASE_URL)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT * FROM job_recommendations ORDER BY date_saved DESC")
+        results = cursor.fetchall()
+
+        cursor.close()
+        connection.close()
+
+        return results
+
+    except Exception as e:
+        print("❌ Error:", e)
+        return []
+
+
+
 
 # ------------------- SESSION STATE INITIALIZATION -------------------
 
