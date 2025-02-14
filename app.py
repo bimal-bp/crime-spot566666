@@ -84,10 +84,6 @@ if "role" not in st.session_state:
     st.session_state["role"] = None
 if "page" not in st.session_state:
     st.session_state["page"] = "Home"
-if "recommendations" not in st.session_state:
-    st.session_state["recommendations"] = []
-if "saved_jobs" not in st.session_state:
-    st.session_state["saved_jobs"] = []
 
 # ------------------- PAGE NAVIGATION -------------------
 
@@ -141,7 +137,6 @@ def home_page():
                 st.session_state["logged_in"] = True
                 st.session_state["role"] = "admin"
                 st.success("Admin login successful!")
-                navigate_to("Admin")
             else:
                 st.error("Invalid admin credentials.")
 
@@ -159,10 +154,18 @@ def fetch_market_trends():
     return []
 
 # ------------------- USER DASHBOARD -------------------
+import psycopg2
+import streamlit as st
+import pandas as pd
+import scipy.sparse as sp
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Database connection details
+DB_URL = "postgresql://neondb_owner:npg_hnmkC3SAi7Lc@ep-steep-dawn-a87fu2ow-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
 
 # Function to create the table in PostgreSQL
 def create_table():
-    conn = get_db_connection()
+    conn = psycopg2.connect(DB_URL)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS job_recommendations (
@@ -173,62 +176,36 @@ def create_table():
             job_link TEXT NOT NULL
         )
     ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS market_trends (
-            id SERIAL PRIMARY KEY,
-            trend_text TEXT NOT NULL,
-            skill_link TEXT NOT NULL
-        )
-    ''')
     conn.commit()
     cursor.close()
     conn.close()
 
 # Function to insert a single job recommendation into the database
 def save_job_recommendation(user_email, job_title, company, job_link):
-    conn = get_db_connection()  # Use the get_db_connection() function
-    if conn is None:
-        st.error("Failed to connect to the database.")
-        return
-    try:
-        cursor = conn.cursor()
-        query = '''
-            INSERT INTO job_recommendations (user_email, job_title, company, job_link)
-            VALUES (%s, %s, %s, %s)
-        '''
-        values = (user_email, job_title, company, job_link)
-        cursor.execute(query, values)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        st.success("Job saved successfully!")
-    except Exception as e:
-        st.error(f"Error saving job: {e}")
-        if conn:
-            conn.close()
+    conn = psycopg2.connect(DB_URL)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO job_recommendations (user_email, job_title, company, job_link)
+        VALUES (%s, %s, %s, %s)
+    ''', (user_email, job_title, company, job_link))
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 # Function to fetch saved jobs for a user
 def get_saved_jobs(user_email):
-    conn = get_db_connection()
-    if conn is None:
-        st.error("Failed to connect to the database.")
-        return []
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT job_title, company, job_link FROM job_recommendations WHERE user_email = %s
-        ''', (user_email,))
-        jobs = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return jobs
-    except Exception as e:
-        st.error(f"Error fetching saved jobs: {e}")
-        if conn:
-            conn.close()
-        return []
+    conn = psycopg2.connect(DB_URL)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT job_title, company, job_link FROM job_recommendations WHERE user_email = %s
+    ''', (user_email,))
+    jobs = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jobs
 
-# Function to fetch job recommendations
+# Function to fetch job recommendations (Replace with actual logic)
+
 def recommend_jobs(job_title, skills, section, experience, salary, locations, top_n=5):
     """Returns top N job recommendations with Company Name and Job Link."""
     
@@ -281,24 +258,24 @@ def dashboard_page():
         selected_locations = st.multiselect("Preferred Locations", available_locations, ["Pune"])
 
         if st.button("Get Recommendations"):
-            # Fetch recommendations and store them in Session State
-            st.session_state.recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
+            recommendations = recommend_jobs(job_title, skills, section, experience, salary, selected_locations)
 
-        # Display job recommendations from Session State
-        if st.session_state.recommendations:
-            st.subheader("Top Job Recommendations")
-            for idx, job in enumerate(st.session_state.recommendations):
-                company = job.get("Company", "Unknown")
-                job_link = job.get("Job Link", "#")
-                st.write(f"🏢 **Company:** {company}")
-                st.markdown(f"🔗 [Apply Here]({job_link})")
-                
-                # Add a "Save" button for each job
-                if st.button(f"Save {company} Job", key=f"save_{idx}"):
-                    save_job_recommendation(user_email, job_title, company, job_link)
-                    st.success(f"Saved job at {company}!")
-        else:
-            st.write("No job recommendations found. Try modifying your search criteria.")
+            if recommendations:
+                st.subheader("Top Job Recommendations")
+
+                # Display job recommendations with a "Save" button for each job
+                for job in recommendations:
+                    company = job.get("Company", "Unknown")
+                    job_link = job.get("Job Link", "#")
+                    st.write(f"🏢 **Company:** {company}")
+                    st.markdown(f"🔗 [Apply Here]({job_link})")
+                    
+                    # Add a "Save" button for each job
+                    if st.button(f"Save {company} Job", key=job_link):
+                        save_job_recommendation(user_email, job_title, company, job_link)
+                        st.success(f"Saved job at {company}!")
+            else:
+                st.write("No job recommendations found. Try modifying your search criteria.")
     
     elif dashboard_option == "My Saved Jobs":
         st.header("My Saved Jobs")
@@ -326,6 +303,14 @@ def dashboard_page():
         else:
             st.write("No market trends available yet.")
 
+# Create table before running the app
+create_table()
+
+# Initialize Session State for job recommendations
+if "recommendations" not in st.session_state:
+    st.session_state.recommendations = []
+
+
 # ------------------- ADMIN DASHBOARD -------------------
 
 def admin_page():
@@ -351,9 +336,6 @@ def admin_page():
             st.error("Please enter both trend details and a skill link.")
 
 # ------------------- MAIN APP LOGIC -------------------
-
-# Create table before running the app
-create_table()
 
 st.title("🔍 Job Recommendation System")
 
