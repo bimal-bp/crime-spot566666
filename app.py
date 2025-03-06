@@ -23,7 +23,7 @@ def get_db_connection():
         return None
 
 # ------------------- USER MANAGEMENT FUNCTIONS -------------------
-
+aa
 def register_user(email, password):
     conn = get_db_connection()
     if conn is None:
